@@ -98,6 +98,26 @@ func TestDNSBootstrap(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestNoneBootstrap(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	g, gCtx := errgroup.WithContext(ctx)
+
+	bs := NewNoneBootstrapper()
+	g.Go(func() error {
+		return bs.Run(gCtx, peer.AddrInfo{})
+	})
+
+	addrInfos, err := bs.Get(ctx)
+	require.NoError(t, err)
+	require.Empty(t, addrInfos)
+
+	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
+}
+
 func TestHTTPBootstrap(t *testing.T) {
 	t.Parallel()
 

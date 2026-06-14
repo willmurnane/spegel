@@ -52,6 +52,7 @@ type P2PRouterConfig struct {
 	Libp2pOpts        []libp2p.Option
 	AdvertiseTTL      time.Duration
 	MaxReprovideDelay time.Duration
+	NoBootstrap       bool
 }
 
 type P2PRouterOption = option.Option[P2PRouterConfig]
@@ -84,6 +85,13 @@ func WithMaxReprovideDelay(delay time.Duration) P2PRouterOption {
 	}
 }
 
+func WithNoBootstrap(noBootstrap bool) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.NoBootstrap = noBootstrap
+		return nil
+	}
+}
+
 var _ Router = &P2PRouter{}
 
 type P2PRouter struct {
@@ -96,6 +104,7 @@ type P2PRouter struct {
 	connectivityGate *channel.Gate
 	protocols        []ma.Multiaddr
 	registryPort     uint16
+	noBootstrap      bool
 }
 
 func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
@@ -203,6 +212,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		connectivityGate: connectivityGate,
 		protocols:        protocols,
 		registryPort:     uint16(registryPort),
+		noBootstrap:      cfg.NoBootstrap,
 	}, nil
 }
 
@@ -223,6 +233,10 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 		return nil
 	})
 	g.Go(func() error {
+		if r.noBootstrap {
+			log.Info("no bootstrap mode enabled, skipping peer discovery")
+			return nil
+		}
 		for {
 			select {
 			case <-gCtx.Done():
@@ -282,6 +296,9 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 }
 
 func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
+	if r.noBootstrap {
+		return true, nil
+	}
 	if r.kdht.RoutingTable().Size() == 0 {
 		return false, nil
 	}
@@ -623,6 +640,11 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 	}
 	if len(errs) == len(addrInfos) {
 		return errors.Join(errs...)
+	}
+
+	// If no peers were available, skip the routing table check.
+	if len(addrInfos) == 0 {
+		return nil
 	}
 
 	// Refresh routing table.

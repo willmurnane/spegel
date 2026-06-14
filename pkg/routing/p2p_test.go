@@ -35,6 +35,42 @@ func TestP2PRouterOptions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
 	require.EqualT(t, "foobar", cfg.DataDir)
+
+	noBootstrapOpts := []P2PRouterOption{
+		WithNoBootstrap(true),
+	}
+	cfg2 := P2PRouterConfig{}
+	err = option.Apply(&cfg2, noBootstrapOpts...)
+	require.NoError(t, err)
+	require.TrueT(t, cfg2.NoBootstrap)
+}
+
+func TestP2PRouterNoBootstrap(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	g, gCtx := errgroup.WithContext(ctx)
+
+	// Create router with no-bootstrap mode.
+	router, err := NewP2PRouter(t.Context(), "localhost:0", NewNoneBootstrapper(), "9090", WithNoBootstrap(true))
+	require.NoError(t, err)
+	g.Go(func() error {
+		return router.Run(gCtx)
+	})
+
+	// Router should be immediately ready without any peers.
+	ready, err := router.Ready(t.Context())
+	require.NoError(t, err)
+	require.TrueT(t, ready)
+
+	// Advertise a key.
+	err = router.Advertise(t.Context(), []string{"test-key"})
+	require.NoError(t, err)
+
+	// Shutdown should complete without errors.
+	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
 }
 
 func TestP2PRouter(t *testing.T) {

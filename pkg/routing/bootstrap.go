@@ -126,6 +126,23 @@ func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 	return addrInfos, nil
 }
 
+var _ Bootstrapper = &NoneBootstrapper{}
+
+type NoneBootstrapper struct{}
+
+func NewNoneBootstrapper() *NoneBootstrapper {
+	return &NoneBootstrapper{}
+}
+
+func (b *NoneBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
+	<-ctx.Done()
+	return nil
+}
+
+func (b *NoneBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
+	return []peer.AddrInfo{}, nil
+}
+
 var _ Bootstrapper = &HTTPBootstrapper{}
 
 type HTTPBootstrapper struct {
